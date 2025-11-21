@@ -1,0 +1,141 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# ============================================================
+# A1 — Eigenvalues of random symmetric matrices
+# ============================================================
+
+def random_symmetric(n, rng, dist='normal', params=None):
+    """Generate an n×n real symmetric matrix with given distribution."""
+    if dist == 'normal':
+        mu = params.get('mu', 0)
+        sigma = params.get('sigma', 1)
+        M = rng.normal(mu, sigma, (n, n))
+    else:
+        low = params.get('low', -0.5)
+        high = params.get('high', 0.5)
+        M = rng.uniform(low, high, (n, n))
+    return (M + M.T) / 2
+
+def eigenvalue_stats(n_values, trials, rng, dist='normal', params=None):
+    """Compute mean max/min/average eigenvalues for each n."""
+    max_list, min_list, mean_list = [], [], []
+
+    for n in n_values:
+        max_e, min_e, mean_e = [], [], []
+        for _ in range(trials):
+            S = random_symmetric(n, rng, dist, params)
+            eigs = np.linalg.eigvalsh(S)
+            max_e.append(eigs.max())
+            min_e.append(eigs.min())
+            mean_e.append(eigs.mean())
+
+        max_list.append(np.mean(max_e))
+        min_list.append(np.mean(min_e))
+        mean_list.append(np.mean(mean_e))
+
+    return max_list, min_list, mean_list
+
+def plot_eigenvalue_results(n_values, max_eigs, min_eigs, mean_eigs):
+    plt.figure(figsize=(14, 4))
+
+    plt.subplot(1, 3, 1)
+    plt.plot(n_values, max_eigs, marker='o')
+    plt.title("Mean max eigenvalue vs n")
+    plt.xlabel("n")
+
+    plt.subplot(1, 3, 2)
+    plt.plot(n_values, min_eigs, marker='o')
+    plt.title("Mean min eigenvalue vs n")
+    plt.xlabel("n")
+
+    plt.subplot(1, 3, 3)
+    plt.plot(n_values, mean_eigs, marker='o')
+    plt.title("Mean eigenvalue vs n")
+    plt.xlabel("n")
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_histogram_for_largest_n(n, rng, dist='normal', params=None):
+    S = random_symmetric(n, rng, dist, params)
+    eigs = np.linalg.eigvalsh(S)
+    plt.hist(eigs, bins=50, density=True)
+    plt.title(f"Eigenvalue histogram (n={n})")
+    plt.xlabel("eigenvalue")
+    plt.ylabel("density")
+    plt.show()
+
+
+# ============================================================
+# A2 — Multiplicativity of norms
+# ============================================================
+
+def sample_matrices(n, rng, orthogonal=False):
+    """Generate A, B where A may be orthogonal."""
+    if orthogonal:
+        Q, _ = np.linalg.qr(rng.normal(size=(n, n)))
+        A = Q
+    else:
+        A = rng.normal(size=(n, n))
+    B = rng.normal(size=(n, n))
+    return A, B
+
+def norm_experiment(n, trials, rng, orthogonal=False):
+    lhs_vals = []
+    rhs_vals = []
+    ratio_vals = []
+
+    for _ in range(trials):
+        A, B = sample_matrices(n, rng, orthogonal)
+        AB = A @ B
+
+        lhs = np.linalg.norm(AB, 'fro')
+        rhs = np.linalg.norm(A, 'fro') * np.linalg.norm(B, 'fro')
+        ratio = lhs / rhs if rhs != 0 else np.nan
+
+        lhs_vals.append(lhs)
+        rhs_vals.append(rhs)
+        ratio_vals.append(ratio)
+
+    return np.array(lhs_vals), np.array(rhs_vals), np.array(ratio_vals)
+
+def plot_norm_scatter(lhs, rhs, title):
+    plt.scatter(rhs, lhs, s=10, alpha=0.6)
+    plt.plot([min(rhs), max(rhs)], [min(rhs), max(rhs)], 'k--', linewidth=1)
+    plt.xlabel(r"$\|A\|\cdot\|B\|$")
+    plt.ylabel(r"$\|AB\|$")
+    plt.title(title)
+    plt.show()
+
+
+# ============================================================
+# Main script
+# ============================================================
+if __name__ == "__main__":
+    rng = np.random.default_rng(42)
+
+    # ---------- A1 ----------
+    n_values = [50, 100, 200, 400]
+    max_eigs, min_eigs, mean_eigs = eigenvalue_stats(
+        n_values, trials=8, rng=rng,
+        dist='normal', params={'mu': 0, 'sigma': 1}
+    )
+
+    plot_eigenvalue_results(n_values, max_eigs, min_eigs, mean_eigs)
+    plot_histogram_for_largest_n(max(n_values), rng)
+
+    # ---------- A2 ----------
+    n = 40
+    trials = 1200
+
+    lhs_rand, rhs_rand, ratio_rand = norm_experiment(n, trials, rng, orthogonal=False)
+    lhs_orth, rhs_orth, ratio_orth = norm_experiment(n, trials, rng, orthogonal=True)
+
+    plot_norm_scatter(lhs_rand, rhs_rand, "Random A, B")
+    plot_norm_scatter(lhs_orth, rhs_orth, "Orthogonal A, random B")
+
+    print("Fraction violating inequality (random):",
+          np.mean(lhs_rand > rhs_rand))
+    print("Fraction violating inequality (orthogonal):",
+          np.mean(lhs_orth > rhs_orth))
